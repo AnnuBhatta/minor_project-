@@ -90,25 +90,19 @@ ASGI_APPLICATION = 'config.asgi.application'
 # ============================================================
 # Database Configuration
 # ============================================================
-# SQLite (Default for development)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Production: set DATABASE_URL (e.g. postgres://user:pass@host:5432/dbname).
+# Local development falls back to SQLite so nothing changes out of the box.
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-
-# PostgreSQL (Uncomment for production)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.getenv('DB_NAME', 'healthmonitor'),
-#         'USER': os.getenv('DB_USER', 'postgres'),
-#         'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
-#         'HOST': os.getenv('DB_HOST', 'localhost'),
-#         'PORT': os.getenv('DB_PORT', '5432'),
-#     }
-# }
 
 # ============================================================
 # Channels / WebSocket Configuration
@@ -297,12 +291,21 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@healthmonitor.com'
 # ============================================================
 # Security Settings (Production)
 # ============================================================
-# SECURE_SSL_REDIRECT = False  # Set to True in production
-# SESSION_COOKIE_SECURE = False  # Set to True in production
-# CSRF_COOKIE_SECURE = False  # Set to True in production
-# SECURE_BROWSER_XSS_FILTER = True
-# SECURE_CONTENT_TYPE_NOSNIFF = True
-# X_FRAME_OPTIONS = 'DENY'
+# Set PRODUCTION=True to harden the app. nginx/caddy terminates TLS at the
+# edge, so Django trusts the X-Forwarded-Proto header from the proxy.
+PRODUCTION = os.getenv('PRODUCTION', 'False') == 'True'
+if PRODUCTION:
+    DEBUG = False
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
 
 # ============================================================
 # Logging Configuration
@@ -377,3 +380,10 @@ LOGGING = {
 # Frontend URL (for CORS and links)
 # ============================================================
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# The frontend origin(s) allowed to make state-changing requests (CSRF).
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', FRONTEND_URL).split(',')
+    if origin.strip()
+]

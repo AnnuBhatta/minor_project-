@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-healthmonitor}
+      POSTGRES_USER: ${POSTGRES_USER:-health}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-health-secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-health} -d ${POSTGRES_DB:-healthmonitor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in your .env file}
+      DEBUG: "False"
+      PRODUCTION: "True"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      DATABASE_URL: postgres://${POSTGRES_USER:-health}:${POSTGRES_PASSWORD:-health-secret}@db:5432/${POSTGRES_DB:-healthmonitor}
+      REDIS_URL: redis://redis:6379/0
+      # Only turn this on once a TLS terminator sits in front of nginx.
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-False}
+      # Email alerts
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@healthmonitor.com}
+      # Firebase Admin (FCM push) — EITHER the env-var credential set below
+      # OR mount firebase-adminsdk.json at /app/firebase-adminsdk.json and set
+      # FIREBASE_CREDENTIALS_PATH. Leave blank to run without push (best-effort).
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_CLIENT_ID: ${FIREBASE_CLIENT_ID:-}
+      FIREBASE_CLIENT_CERT_URL: ${FIREBASE_CLIENT_CERT_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:-}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN:-}
+        VITE_FIREBASE_DATABASE_URL: ${VITE_FIREBASE_DATABASE_URL:-}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:-}
+        VITE_FIREBASE_STORAGE_BUCKET: ${VITE_FIREBASE_STORAGE_BUCKET:-}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
+        VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY:-}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

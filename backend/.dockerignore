@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+db.sqlite3
+*.sqlite3
+logs
+.env
+firebase-adminsdk*.json
+staticfiles
+media
+*.log

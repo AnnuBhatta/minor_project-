@@ -3,6 +3,7 @@ backend/.env
 .env
 .env.*
 !.env.example
+firebase-adminsdk*.json
 
 # ─── Python / Django ──────────────────────────────────────
 __pycache__/

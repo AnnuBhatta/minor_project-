@@ -12,7 +12,9 @@ firebase-admin==6.4.0
 geopy==2.4.1
 django-filter==23.5
 drf-yasg==1.21.7
-#psycopg2-binary==2.9.9
+# PostgreSQL driver for production. Only needed when DATABASE_URL points at
+# PostgreSQL (Docker uses it automatically; local SQLite dev does not need it).
+psycopg2-binary==2.9.9
 python-dotenv==1.0.0
 requests==2.31.0
 joblib==1.4.2
@@ -24,5 +26,6 @@ pandas==2.2.3               # 2.2.x supports numpy 2.x (required by tensorflow 2
 tensorflow==2.21.0          # Keras LSTM risk model (lstm_risk_model.keras)
 redis==5.0.1                # Redis client for Channels
 django-redis==5.4.0         # Django Redis cache backend
+dj-database-url==3.1.2      # Env-driven DATABASE_URL for production (PostgreSQL)
 django-ckeditor==6.7.0      # Rich text editor (optional)
 django-import-export==3.3.6 # Import/export data (optional)
