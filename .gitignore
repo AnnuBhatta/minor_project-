@@ -1,0 +1,60 @@
+# ─── Environment & secrets ────────────────────────────────
+backend/.env
+.env
+.env.*
+!.env.example
+
+# ─── Python / Django ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+backend/.venv/
+.venv/
+venv/
+env/
+ENV/
+
+# Django
+db.sqlite3
+backend/db.sqlite3
+*.sqlite3
+*.db
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Logs
+logs/
+*.log
+backend/logs/
+
+# ─── Node / frontend ──────────────────────────────────────
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+build/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── OS / editor ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,12 @@
+{
+  "risk_features": [
+    "Heart Rate",
+    "Oxygen Saturation",
+    "Systolic Blood Pressure",
+    "Diastolic Blood Pressure",
+    "Derived_HR",
+    "Derived_Pulse_Pressure"
+  ],
+  "note": "Feature names must match rf_risk_model.joblib.feature_names_in_ exactly. Trained in Smartwatch_RandomForest_Minor_Project notebook (200,020 smartwatch readings, 91% test accuracy). Classes: High Risk=0, Low Risk=1 (alphabetical LabelEncoder). Derived_HR is a derived heart-rate variability metric defaulted to 0.1 when no history is available; Derived_Pulse_Pressure = Systolic - Diastolic.",
+  "derived_hr_default": 0.1
+}
