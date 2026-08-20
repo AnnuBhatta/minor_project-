@@ -38,12 +38,15 @@ const LiveAlertsPanel = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live emergency-location channel: ws://localhost:8000/ws/location/?token=
+  // Live emergency-location channel, same origin as the page so it works in
+  // dev (Vite proxies /ws) and in production (reverse proxy terminates TLS).
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
+    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsBase = `${wsProto}://${window.location.host}`;
     const ws = new WebSocket(
-      `ws://localhost:8000/ws/location/?token=${encodeURIComponent(token)}`
+      `${wsBase}/ws/location/?token=${encodeURIComponent(token)}`
     );
     locWsRef.current = ws;
     ws.onopen = () => console.log('[LOC] Connected to /ws/location/');

@@ -33,7 +33,9 @@ import React, {
  */
 const WebSocketContext = createContext(null);
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/alerts/';
+const WS_URL =
+  import.meta.env.VITE_WS_URL ||
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/alerts/`;
 
 const readToken = () => localStorage.getItem('access_token');
 const readRefresh = () => localStorage.getItem('refresh_token');

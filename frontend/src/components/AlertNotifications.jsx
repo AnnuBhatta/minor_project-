@@ -34,7 +34,8 @@ const AlertNotifications = ({ userId }) => {
     }
 
     try {
-      const ws = new WebSocket(`ws://localhost:8000/ws/alerts/?token=${encodeURIComponent(token)}`);
+      const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${wsProto}://${window.location.host}/ws/alerts/?token=${encodeURIComponent(token)}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
