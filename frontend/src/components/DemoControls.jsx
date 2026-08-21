@@ -94,6 +94,20 @@ export default function DemoControls({ onTick }) {
     }
   };
 
+  const getPosition = () =>
+    new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
   const runGuaranteed = async (endpoint, label) => {
     setGenBusy(true);
     setGenError(null);
@@ -101,7 +115,12 @@ export default function DemoControls({ onTick }) {
     try {
       // Tier 3 / full demos replay ~63 readings through RF + LSTM, which
       // takes ~40s. The global axios timeout is 10s, so override it here.
-      const res = await api.post(`/demo/alert/${endpoint}/`, {}, { timeout: 300000 });
+      const location = await getPosition();
+      const res = await api.post(
+        `/demo/alert/${endpoint}/`,
+        location ? { location } : {},
+        { timeout: 300000 }
+      );
       setGenResult({ ...res.data, _label: label });
     } catch (e) {
       setGenError(e.response?.data?.message || `Failed to run ${label}.`);

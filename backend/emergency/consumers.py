@@ -14,28 +14,24 @@ class EmergencyConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
             
+        # ✅ Join emergency group for this user
         self.group_name = f"emergency_{self.user.id}"
         
-        # Join group
         await self.channel_layer.group_add(
             self.group_name,
             self.channel_name
         )
         
         await self.accept()
-        
-        # Send online status
         await self.send_online_status(True)
     
     async def disconnect(self, close_code):
-        # Leave group
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(
                 self.group_name,
                 self.channel_name
             )
         
-        # Update online status
         if hasattr(self, 'user') and self.user.is_authenticated:
             await self.send_online_status(False)
     
@@ -44,7 +40,6 @@ class EmergencyConsumer(AsyncWebsocketConsumer):
         message_type = data.get('type')
         
         if message_type == 'location_update':
-            # Handle location updates
             location = data.get('location')
             if location:
                 await self.channel_layer.group_send(
@@ -56,24 +51,33 @@ class EmergencyConsumer(AsyncWebsocketConsumer):
                     }
                 )
     
+    # ✅ Send emergency alert with location to WebSocket
+    async def emergency_alert(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'emergency_alert',
+            'data': event.get('alert', {})
+        }))
+    
+    async def emergency_location(self, event):
+        """Handle emergency location broadcast from location app"""
+        await self.send(text_data=json.dumps({
+            'type': 'emergency_location',
+            'location': event.get('location', {})
+        }))
+    
     async def location_update(self, event):
-        # Send location update to WebSocket
         await self.send(text_data=json.dumps({
             'type': 'location_update',
             'location': event['location'],
-            'user_id': event['user_id']
-        }))
-    
-    async def emergency_alert(self, event):
-        # Send emergency alert to WebSocket
-        await self.send(text_data=json.dumps({
-            'type': 'emergency_alert',
-            'data': event['data']
+            'user_id': event.get('user_id', self.user.id)
         }))
     
     @database_sync_to_async
     def send_online_status(self, is_online):
-        user = User.objects.get(id=self.user.id)
-        user.is_online = is_online
-        user.last_active = timezone.now()
-        user.save()
+        try:
+            user = User.objects.get(id=self.user.id)
+            user.is_online = is_online
+            user.last_active = timezone.now()
+            user.save()
+        except User.DoesNotExist:
+            pass

@@ -141,7 +141,7 @@ def send_alert_email(
 
         if emergency_url is None:
             base = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
-            emergency_url = f"{base}/emergency"
+            emergency_url = f"{base}/alerts"
 
         timestamp = timestamp or timezone.now()
 

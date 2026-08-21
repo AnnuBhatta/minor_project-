@@ -61,11 +61,10 @@ class UpdateLocationView(APIView):
             
             # If emergency, broadcast to guardian groups
             if location.is_emergency:
-                # Get all guardians
                 guardians = request.user.guardians.all()
                 for guardian in guardians:
                     async_to_sync(channel_layer.group_send)(
-                        f"guardian_{guardian.id}_emergency",
+                        f"emergency_{guardian.id}",  # ✅ FIXED: Correct group name
                         {
                             'type': 'emergency_location',
                             'location': {
@@ -105,7 +104,6 @@ class LocationHistoryView(generics.ListAPIView):
         limit = int(self.request.query_params.get('limit', 100))
         is_emergency = self.request.query_params.get('is_emergency')
 
-        # Guardians may only view the history of patients they monitor.
         if int(user_id) != self.request.user.id:
             target_user = User.objects.filter(id=user_id).first()
             if not target_user or self.request.user not in target_user.guardians.all():
@@ -127,9 +125,7 @@ class CurrentLocationView(APIView):
     def get(self, request, user_id=None):
         target_user_id = user_id or request.user.id
         
-        # Check if current user has permission to view this location
         if target_user_id != request.user.id:
-            # Check if request user is a guardian of the target
             target_user = get_object_or_404(User, id=target_user_id)
             if request.user not in target_user.guardians.all():
                 return Response({

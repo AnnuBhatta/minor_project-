@@ -29,3 +29,5 @@ django-redis==5.4.0         # Django Redis cache backend
 dj-database-url==3.1.2      # Env-driven DATABASE_URL for production (PostgreSQL)
 django-ckeditor==6.7.0      # Rich text editor (optional)
 django-import-export==3.3.6 # Import/export data (optional)
+dj-database-url==2.1.0
+psycopg2-binary==2.9.9

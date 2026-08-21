@@ -418,7 +418,9 @@ class TriggerTier1AlertView(APIView):
     def post(self, request):
         try:
             result = alert_generator.generate_emergency_scenario(
-                request.user, request.data.get('patient_id'))
+                request.user,
+                request.data.get('patient_id'),
+                location=request.data.get('location'))
             return Response(result)
         except Exception as e:
             logger.error(f"Guaranteed Tier 1 demo failed: {e}")
@@ -434,7 +436,9 @@ class TriggerTier2AlertView(APIView):
     def post(self, request):
         try:
             result = alert_generator.generate_health_alert_scenario(
-                request.user, request.data.get('patient_id'))
+                request.user,
+                request.data.get('patient_id'),
+                location=request.data.get('location'))
             return Response(result)
         except Exception as e:
             logger.error(f"Guaranteed Tier 2 demo failed: {e}")
@@ -451,7 +455,9 @@ class TriggerTier3AlertView(APIView):
     def post(self, request):
         try:
             result = alert_generator.generate_trend_alert_scenario(
-                request.user, request.data.get('patient_id'))
+                request.user,
+                request.data.get('patient_id'),
+                location=request.data.get('location'))
             return Response(result)
         except Exception as e:
             logger.error(f"Guaranteed Tier 3 demo failed: {e}")
@@ -467,7 +473,9 @@ class TriggerFullDemoView(APIView):
     def post(self, request):
         try:
             result = alert_generator.generate_full_demo(
-                request.user, request.data.get('patient_id'))
+                request.user,
+                request.data.get('patient_id'),
+                location=request.data.get('location'))
             return Response(result)
         except Exception as e:
             logger.error(f"Full guaranteed demo failed: {e}")

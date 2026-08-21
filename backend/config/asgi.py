@@ -3,6 +3,10 @@ import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 from django.core.asgi import get_asgi_application
+
+# ✅ Get Django ASGI app FIRST
+django_asgi_app = get_asgi_application()
+
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from config.jwt_auth import JWTAuthMiddleware
@@ -14,8 +18,8 @@ from alerts.routing import websocket_urlpatterns as alerts_urls
 websocket_urlpatterns = alerts_urls + emergency_urls + location_urls
 
 application = ProtocolTypeRouter({
-    'http': get_asgi_application(),
-    'websocket': AuthMiddlewareStack(
-        JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+    'http': django_asgi_app,
+    'websocket': JWTAuthMiddleware(
+        URLRouter(websocket_urlpatterns)
     ),
 })

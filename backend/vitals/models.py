@@ -7,9 +7,7 @@ class VitalSign(models.Model):
         ('blood_pressure', 'Blood Pressure'),
         ('temperature', 'Temperature'),
         ('oxygen_saturation', 'Oxygen Saturation'),
-        ('blood_glucose', 'Blood Glucose'),
-        ('weight', 'Weight'),
-        ('ecg', 'ECG Data'),
+        
     ]
     
     SOURCE_CHOICES = [

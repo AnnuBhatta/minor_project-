@@ -92,13 +92,16 @@ class AlertGenerator:
         return qs.order_by('-id').first()
 
     @staticmethod
-    def _post(client, target_patient_id, tag, readings):
-        return client.post('/api/readings/ingest/', {
+    def _post(client, target_patient_id, tag, readings, location=None):
+        payload = {
             'source': 'simulated',
             'scenario_id': tag,
             'patient_id': target_patient_id,
             'readings': readings,
-        }, format='json')
+        }
+        if location:
+            payload['location'] = location
+        return client.post('/api/readings/ingest/', payload, format='json')
 
     @staticmethod
     def _result(tier, confirmed, tiers, alert, scenario, reason, summary):
@@ -121,7 +124,7 @@ class AlertGenerator:
     # ------------------------------------------------------------------ #
     # scenarios
     # ------------------------------------------------------------------ #
-    def generate_emergency_scenario(self, requester, target_patient_id=None):
+    def generate_emergency_scenario(self, requester, target_patient_id=None, location=None):
         """Guarantees a Tier 1 (Emergency) alert + EmergencyEvent + location."""
         target = int(target_patient_id or requester.id)
         tag = f'demo-tier1-{int(time.time())}'
@@ -130,7 +133,7 @@ class AlertGenerator:
         before = timezone.now()
 
         hr, spo2, sbp, dbp = TIER1_VALUES
-        resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp))
+        resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp), location=location)
         tiers = self._tiers(resp)
         alert = self._latest_alert(target, since=before)
 
@@ -147,7 +150,7 @@ class AlertGenerator:
             'An EmergencyEvent and live-location broadcast were also created.',
         )
 
-    def generate_health_alert_scenario(self, requester, target_patient_id=None):
+    def generate_health_alert_scenario(self, requester, target_patient_id=None, location=None):
         """Guarantees a Tier 2 (Health Alert) alert via 3 consecutive RF-high
         readings. Kept to just 3 readings so Tier 3 is NOT evaluated yet."""
         target = int(target_patient_id or requester.id)
@@ -159,7 +162,7 @@ class AlertGenerator:
         tiers = []
         for hr, spo2, sbp, dbp in TIER2_SEQUENCE:
             time.sleep(POST_DELAY)
-            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp))
+            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp), location=location)
             tiers.extend(self._tiers(resp))
         tiers = sorted(set(tiers))
         alert = self._latest_alert(target, since=before)
@@ -175,7 +178,7 @@ class AlertGenerator:
             'Tier 2 (Health Alert) fired: RF predicted high risk on 3 consecutive readings.',
         )
 
-    def generate_trend_alert_scenario(self, requester, target_patient_id=None):
+    def generate_trend_alert_scenario(self, requester, target_patient_id=None, location=None):
         """Guarantees a Trend (Tier 3) alert via LSTM early-warning, gated
         behind a Tier 2 trigger. The worst-case last-hour deterioration
         escalates to a full EMERGENCY (Tier 1 delivery: EmergencyEvent +
@@ -200,7 +203,7 @@ class AlertGenerator:
             sbp = round(TREND_START[2] + t * (TREND_END[2] - TREND_START[2]))
             dbp = round(TREND_START[3] + t * (TREND_END[3] - TREND_START[3]))
             time.sleep(POST_DELAY)
-            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp))
+            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp), location=location)
             tiers.extend(self._tiers(resp))
 
         # Phase 2: 3 sharply elevated readings -> Tier 2 fires, then the LSTM
@@ -210,7 +213,7 @@ class AlertGenerator:
         # the escalation.
         for hr, spo2, sbp, dbp in TIER2_SEQUENCE:
             time.sleep(POST_DELAY)
-            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp))
+            resp = self._post(client, target, tag, self._batch(hr, spo2, sbp, dbp), location=location)
             tiers.extend(self._tiers(resp))
         tiers = sorted(set(tiers))
         alert = self._latest_alert(target, since=before)
@@ -232,14 +235,14 @@ class AlertGenerator:
             'Tier 2 trigger.',
         )
 
-    def generate_full_demo(self, requester, target_patient_id=None):
+    def generate_full_demo(self, requester, target_patient_id=None, location=None):
         """Run all three guaranteed scenarios in sequence."""
         target = int(target_patient_id or requester.id)
-        r1 = self.generate_emergency_scenario(requester, target)
+        r1 = self.generate_emergency_scenario(requester, target, location=location)
         time.sleep(0.2)
-        r2 = self.generate_health_alert_scenario(requester, target)
+        r2 = self.generate_health_alert_scenario(requester, target, location=location)
         time.sleep(0.2)
-        r3 = self.generate_trend_alert_scenario(requester, target)
+        r3 = self.generate_trend_alert_scenario(requester, target, location=location)
         confirmed = r1['confirmed'] and r2['confirmed'] and r3['confirmed']
         return {
             'tier': 'all',

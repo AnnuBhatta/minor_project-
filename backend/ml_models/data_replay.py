@@ -152,6 +152,18 @@ class DataReplayService:
             },
         ]
 
+    def _get_response_data(self, response):
+        """Safely extract data from response, handling both DRF and Django responses."""
+        if hasattr(response, 'data'):
+            return response.data
+        elif hasattr(response, 'json'):
+            try:
+                return response.json()
+            except Exception:
+                return {'error': 'Invalid JSON response'}
+        else:
+            return {'content': str(response.content) if hasattr(response, 'content') else 'Unknown response'}
+
     def start(self, requester, target_patient_id=None, interval_seconds=2.0,
               patient_ids=None, max_cycles=None, max_readings=None,
               sample_readings=None):
@@ -285,14 +297,15 @@ class DataReplayService:
                         'readings': self._row_to_readings(row),
                     }, format='json')
                     if response.status_code >= 400:
+                        response_data = self._get_response_data(response)
                         logger.warning(
                             'Replay tick %s rejected: %s',
-                            global_index, response.data,
+                            global_index, response_data,
                         )
-                except Exception:
+                except Exception as e:
                     logger.exception(
-                        'Replay tick %s failed for target patient %s',
-                        global_index, target_patient_id,
+                        'Replay tick %s failed for target patient %s: %s',
+                        global_index, target_patient_id, str(e),
                     )
                 time.sleep(interval_seconds)
             self._status.update({'running': False, 'status': 'completed'})
@@ -334,19 +347,20 @@ class DataReplayService:
                                 'readings': self._row_to_readings(row),
                             }, format='json')
                             if response.status_code >= 400:
+                                response_data = self._get_response_data(response)
                                 logger.warning(
                                     'Replay tick %s rejected: %s',
-                                    global_index, response.data,
+                                    global_index, response_data,
                                 )
-                        except Exception:
+                        except Exception as e:
                             logger.exception(
-                                'Replay tick %s failed for target patient %s',
-                                global_index, target_patient_id,
+                                'Replay tick %s failed for target patient %s: %s',
+                                global_index, target_patient_id, str(e),
                             )
                         time.sleep(interval_seconds)
             self._status.update({'running': False, 'status': 'completed'})
-        except Exception:
-            logger.exception('Dataset replay thread crashed')
+        except Exception as e:
+            logger.exception('Dataset replay thread crashed: %s', str(e))
             self._status.update({'running': False, 'status': 'error'})
 
     def stop(self):

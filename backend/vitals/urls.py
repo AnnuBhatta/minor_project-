@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     VitalHistoryView, VitalLatestView, VitalListCreateView, VitalTrendView,
-    WeeklyReportView, DailyChartView,
+    WeeklyReportView, DailyChartView, VitalReadingIngestView,
 )
 
 app_name = 'vitals'
@@ -13,4 +13,6 @@ urlpatterns = [
     path('trend/', VitalTrendView.as_view(), name='vital-trend'),
     path('weekly-report/', WeeklyReportView.as_view(), name='vital-weekly-report'),
     path('daily-chart/', DailyChartView.as_view(), name='vital-daily-chart'),
+    # ✅ Ingest endpoint for data replay
+    path('ingest/', VitalReadingIngestView.as_view(), name='vital-ingest'),
 ]

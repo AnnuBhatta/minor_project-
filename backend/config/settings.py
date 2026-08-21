@@ -13,7 +13,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ============================================================
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-your-secret-key-here')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+
+# ✅ FIX: Added 'testserver' for testing and local development
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver', '*.vercel.app', '*.railway.app']
 
 # ============================================================
 # Application definition
@@ -43,15 +45,15 @@ INSTALLED_APPS = [
     'emergency',
     'location',
     'ml_api',
-    'demo',
+    'demo',  # ✅ ADDED
 ]
 
 # ============================================================
 # Middleware
 # ============================================================
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -90,26 +92,38 @@ ASGI_APPLICATION = 'config.asgi.application'
 # ============================================================
 # Database Configuration
 # ============================================================
-# Production: set DATABASE_URL (e.g. postgres://user:pass@host:5432/dbname).
-# Local development falls back to SQLite so nothing changes out of the box.
+# Production: Use DATABASE_URL (PostgreSQL on Vercel/Neon/Railway)
+# Local: Fallback to SQLite
+import dj_database_url
+
 DATABASE_URL = os.getenv('DATABASE_URL')
+
 if DATABASE_URL:
-    import dj_database_url
-    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+    # ✅ PostgreSQL (Production)
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True,
+             disable_server_side_cursors=True
+        )
+    }
+    print(f"✅ Using PostgreSQL database at: {DATABASE_URL[:50]}...")
 else:
+    # ✅ SQLite (Local Development)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+             'DISABLE_SERVER_SIDE_CURSORS': True,
         }
     }
+    print("✅ Using SQLite database (local development)")
 
 # ============================================================
 # Channels / WebSocket Configuration
 # ============================================================
-# Redis is optional for local development. With no REDIS_URL,
-# Channels uses an in-memory layer so location updates work 
-# without a separate Redis service.
 REDIS_URL = os.getenv('REDIS_URL')
 CHANNEL_LAYERS = {
     'default': (
@@ -159,7 +173,7 @@ AUTH_USER_MODEL = 'accounts.User'
 # ============================================================
 # CORS Configuration
 # ============================================================
-CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_METHODS = [
@@ -289,23 +303,16 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@healthmonitor.com')
 
 # ============================================================
-# Security Settings (Production)
+# Frontend URL (for CORS and links)
 # ============================================================
-# Set PRODUCTION=True to harden the app. nginx/caddy terminates TLS at the
-# edge, so Django trusts the X-Forwarded-Proto header from the proxy.
-PRODUCTION = os.getenv('PRODUCTION', 'False') == 'True'
-if PRODUCTION:
-    DEBUG = False
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# CSRF Trusted Origins
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', FRONTEND_URL).split(',')
+    if origin.strip()
+]
 
 # ============================================================
 # Logging Configuration
@@ -373,17 +380,20 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
+        'demo': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'daphne': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'channels': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
-
-# ============================================================
-# Frontend URL (for CORS and links)
-# ============================================================
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-
-# The frontend origin(s) allowed to make state-changing requests (CSRF).
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv('CSRF_TRUSTED_ORIGINS', FRONTEND_URL).split(',')
-    if origin.strip()
-]

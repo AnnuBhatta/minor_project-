@@ -6,8 +6,6 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
-from vitals.views import VitalReadingIngestView
-
 # ============================================================
 # Swagger/OpenAPI Configuration
 # ============================================================
@@ -32,14 +30,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # API endpoints
-    path('api/readings/ingest/', VitalReadingIngestView.as_view(), name='readings-ingest'),
     path('api/auth/', include('accounts.urls')),
     path('api/vitals/', include('vitals.urls')),
+    path('api/readings/', include('vitals.urls')),  # For /api/readings/ingest/
     path('api/alerts/', include('alerts.urls')),
-    path('api/demo/', include('demo.urls')),
     path('api/emergency/', include('emergency.urls')),
     path('api/location/', include('location.urls')),
     path('api/ml/', include('ml_api.urls')),
+    path('api/demo/', include('demo.urls')),  # ✅ ADDED
     
     # Swagger/OpenAPI Documentation
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

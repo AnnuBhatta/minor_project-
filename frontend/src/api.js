@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api",
+  timeout: 20000,
 });
 
 api.interceptors.request.use((config) => {
@@ -22,10 +22,10 @@ api.interceptors.response.use(
     const refresh = localStorage.getItem("refresh_token");
 
     if (
-      error.response?.status === 401
-      && !originalRequest?._retry
-      && !originalRequest?.url?.includes('/auth/refresh/')
-      && refresh
+      error.response?.status === 401 &&
+      !originalRequest?._retry &&
+      !originalRequest?.url?.includes("/auth/refresh/") &&
+      refresh
     ) {
       originalRequest._retry = true;
       try {

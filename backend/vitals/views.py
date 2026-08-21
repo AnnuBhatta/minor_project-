@@ -12,15 +12,20 @@ from rest_framework.views import APIView
 
 from .models import VitalSign, Threshold
 from .serializers import VitalSignInputSerializer, VitalSignSerializer, ThresholdSerializer
-from .inference import run_inference_pipeline
+
+# ✅ IMPORT the inference pipeline
+try:
+    from .inference import run_inference_pipeline
+except ImportError:
+    # Fallback if inference module doesn't exist yet
+    def run_inference_pipeline(user):
+        return {'status': 'inference_not_available'}
 
 User = get_user_model()
 
 
 def _resolve_view_patient(request):
-    """Resolve which patient's data a read endpoint should return. Defaults
-    to the caller. A guardian may pass ?patient_id=<id> to view one of
-    their linked patients' dashboards instead."""
+    """Resolve which patient's data a read endpoint should return."""
     patient_id = request.query_params.get('patient_id')
     if not patient_id or str(patient_id) == str(request.user.id):
         return request.user, None
@@ -32,10 +37,12 @@ def _resolve_view_patient(request):
         )
     return target, None
 
+
 class VitalSignViewSet(viewsets.ModelViewSet):
     """ViewSet for VitalSign model"""
     queryset = VitalSign.objects.all()
     serializer_class = VitalSignSerializer
+
 
 class ThresholdViewSet(viewsets.ModelViewSet):
     """ViewSet for Threshold model"""
@@ -129,10 +136,12 @@ class VitalListCreateView(generics.ListCreateAPIView):
 
 
 class VitalLatestView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         patient, error = _resolve_view_patient(request)
+        print(patient)
+        print(error)
         if error:
             return error
         readings = list(VitalSign.objects.filter(user=patient).order_by('-timestamp'))
@@ -225,12 +234,6 @@ class WeeklyReportView(generics.GenericAPIView):
 
 
 class DailyChartView(generics.GenericAPIView):
-    """
-    Powers the caregiver dashboard chart: daily mean + peak heart rate,
-    percentage of time spent in high risk, alert markers overlaid on the
-    timeline, and an episode-count/duration badge (a "high-risk episode" is
-    a run of consecutive high-risk readings).
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -247,7 +250,6 @@ class DailyChartView(generics.GenericAPIView):
             .order_by('timestamp')
         )
 
-        # ---- daily mean + peak heart rate (from raw readings) ---- #
         by_day = {}
         for reading in readings:
             if reading.vital_type != 'heart_rate':
@@ -261,10 +263,6 @@ class DailyChartView(generics.GenericAPIView):
             for day, vals in sorted(by_day.items())
         ]
 
-        # ---- risk-over-time, %time-in-high-risk, episodes ---- #
-        # Driven by the same Prediction records that trigger alerts (RF
-        # snapshot classification per ingest event), so this chart can never
-        # disagree with the alert markers overlaid on it.
         from ml_api.models import Prediction
         from alerts.models import Alert
 
@@ -305,7 +303,6 @@ class DailyChartView(generics.GenericAPIView):
             for ep in episodes
         ]
 
-        # ---- alert markers to overlay on the chart ---- #
         alert_markers = [
             {'id': a.id, 'timestamp': a.created_at.isoformat(), 'severity': a.severity, 'title': a.title}
             for a in Alert.objects.filter(user=patient, created_at__gte=since).order_by('created_at')
@@ -324,10 +321,7 @@ class DailyChartView(generics.GenericAPIView):
 
 
 def _resolve_target_patient(request_user, patient_id):
-    """A reading always belongs to a patient. If no patient_id is given, the
-    authenticated caller IS the patient (this is how a real watch or the
-    simulator would authenticate). A patient_id may be supplied by a
-    guardian viewing/feeding data for one of their patients."""
+    """Resolve the target patient for a reading submission."""
     if not patient_id or str(patient_id) == str(request_user.id):
         return request_user, None
     target = get_object_or_404(User, id=patient_id)
@@ -338,25 +332,40 @@ def _resolve_target_patient(request_user, patient_id):
     return target, None
 
 
+def _save_reported_location(patients, location):
+    """Persist a client-supplied GPS fix ({lat, lng[, accuracy]}) as the
+    latest UserLocation for each patient. Best-effort: a malformed payload
+    is logged and skipped so ingest never fails because of location."""
+    if not isinstance(location, Mapping):
+        return
+    try:
+        lat = float(location.get('lat', location.get('latitude')))
+        lng = float(location.get('lng', location.get('longitude')))
+    except (TypeError, ValueError):
+        return
+    from location.models import UserLocation
+    accuracy = location.get('accuracy')
+    try:
+        accuracy = float(accuracy) if accuracy is not None else None
+    except (TypeError, ValueError):
+        accuracy = None
+    for patient in patients:
+        try:
+            UserLocation.objects.create(
+                user=patient,
+                latitude=lat,
+                longitude=lng,
+                accuracy=accuracy,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'Failed to save reported location for patient %s', patient.id)
+
+
 class VitalReadingIngestView(APIView):
     """
     Source-agnostic ingestion endpoint: POST /api/readings/ingest/
-
-    Accepts either a single reading object or a batch. It does not care
-    whether the data came from the demo scenario runner (source=simulated)
-    or a real device (source=device) -- both are written to the same
-    VitalSign table, tagged by `source`, so nothing downstream (inference,
-    dashboard, alerts) needs a second code path when a real watch is added
-    later.
-
-    Body shapes accepted:
-      {"vital_type": "heart_rate", "value": {"heart_rate": 82}, "source": "device"}
-      {"readings": [ {...}, {...} ], "patient_id": 4, "source": "simulated"}
-      [ {...}, {...} ]   (bare list, same shape as the "readings" case)
-
-    Per-item `patient_id` / `source` override the top-level ones if present.
-    Runs the RF + LSTM inference pipeline once per distinct patient touched
-    by the request, after all readings in the batch are saved.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -375,6 +384,7 @@ class VitalReadingIngestView(APIView):
         default_source = top_level.get('source', 'device')
         default_patient_id = top_level.get('patient_id')
         default_scenario_id = top_level.get('scenario_id')
+        location = top_level.get('location')
 
         created = []
         errors = []
@@ -403,9 +413,6 @@ class VitalReadingIngestView(APIView):
 
             reading = serializer.save(user=target_patient)
 
-            # Allow the simulator to backdate readings so a sped-up scenario
-            # (e.g. "1 simulated hour every few real seconds") still lines
-            # up on time-series charts. Optional -- real devices won't send this.
             simulated_timestamp = item.get('timestamp')
             if simulated_timestamp:
                 parsed = parse_datetime(simulated_timestamp)
@@ -416,9 +423,18 @@ class VitalReadingIngestView(APIView):
             created.append(VitalSignSerializer(reading).data)
             touched_patients[target_patient.id] = target_patient
 
+        # Persist any client-supplied GPS fix so the alert engine, the
+        # EmergencyEvent and the guardian broadcasts carry real coordinates.
+        if location:
+            _save_reported_location(touched_patients.values(), location)
+
         inference_results = []
         for patient in touched_patients.values():
-            inference_results.append(run_inference_pipeline(patient))
+            try:
+                result = run_inference_pipeline(patient)
+                inference_results.append(result)
+            except Exception as e:
+                inference_results.append({'error': str(e)})
 
         response_status = status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST
         return Response({
